@@ -1,0 +1,41 @@
+.program edgedetect
+  mov osr, !null
+  mov x, pins
+
+start_x:
+  mov y, pins
+  jmp x!=y difference_x
+  in null, 1
+  jmp start_y
+
+start_y:
+  mov x, pins
+  jmp x!=y difference_y
+  in null, 1
+  jmp start_x
+
+difference_x:
+  in osr, 1
+  jmp start_y
+
+difference_y:
+  in osr, 1
+  jmp start_x
+
+  
+  
+% c-sdk {
+static inline void edgedetect_program_init(PIO pio, uint sm, uint offset, uint start_pin, uint pin_count) {
+    pio_sm_config c = edgedetect_program_get_default_config(offset);
+
+    sm_config_set_in_pins(&c, start_pin);
+    sm_config_set_in_shift(&c, false, true, 32);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+    for (uint i = start_pin; i < start_pin + pin_count; i++) {
+      gpio_pull_down(i);
+    }
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_consecutive_pindirs(pio, sm, start_pin, pin_count, false);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
