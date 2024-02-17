@@ -9,8 +9,12 @@ pico_sdk_init()
 
 add_executable(
     pico-logic-analyzer
+    main.c
     logic.c
+    spsc.c
 )
+target_compile_options(pico-logic-analyzer PRIVATE
+  -Wall -Wextra)
 pico_generate_pio_header(
     pico-logic-analyzer 
     ${CMAKE_CURRENT_LIST_DIR}/capture.pio
@@ -25,6 +29,7 @@ target_link_libraries(
   pico-logic-analyzer 
   pico_stdlib
   hardware_pio
+  hardware_dma
 )
 
 pico_enable_stdio_usb(pico-logic-analyzer 1)

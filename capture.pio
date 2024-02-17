@@ -1,7 +1,8 @@
 .program capture
+  nop [1] // Delay collection by 2 cycles to match edgedetect
 .wrap_target
 start:
-  mov isr, pins [3]
+  in pins, 32 [3]
 .wrap
   
 % c-sdk {
@@ -16,6 +17,6 @@ static inline void capture_program_init(PIO pio, uint sm, uint offset, uint star
     }
     pio_sm_init(pio, sm, offset, &c);
     pio_sm_set_consecutive_pindirs(pio, sm, start_pin, pin_count, false);
-    pio_sm_set_enabled(pio, sm, true);
+    pio_sm_set_clkdiv_int_frac(pio, sm, 2, 0);
 }
 %}

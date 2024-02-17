@@ -23,7 +23,6 @@ difference_y:
   jmp start_x
 
   
-  
 % c-sdk {
 static inline void edgedetect_program_init(PIO pio, uint sm, uint offset, uint start_pin, uint pin_count) {
     pio_sm_config c = edgedetect_program_get_default_config(offset);
@@ -36,6 +35,6 @@ static inline void edgedetect_program_init(PIO pio, uint sm, uint offset, uint s
     }
     pio_sm_init(pio, sm, offset, &c);
     pio_sm_set_consecutive_pindirs(pio, sm, start_pin, pin_count, false);
-    pio_sm_set_enabled(pio, sm, true);
+    pio_sm_set_clkdiv_int_frac(pio, sm, 2, 0);
 }
 %}
