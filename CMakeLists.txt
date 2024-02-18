@@ -11,6 +11,7 @@ add_executable(
     pico-logic-analyzer
     main.c
     logic.c
+    trigger.c
     spsc.c
 )
 target_compile_options(pico-logic-analyzer PRIVATE
@@ -23,6 +24,11 @@ pico_generate_pio_header(
 pico_generate_pio_header(
     pico-logic-analyzer
     ${CMAKE_CURRENT_LIST_DIR}/edgedetect.pio
+)
+
+pico_generate_pio_header(
+    pico-logic-analyzer
+    ${CMAKE_CURRENT_LIST_DIR}/triggergen.pio
 )
 
 target_link_libraries(

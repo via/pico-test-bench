@@ -16,4 +16,3 @@ int spsc_allocate(struct spsc_queue *q);
 void spsc_push(struct spsc_queue *q);
 int spsc_next(struct spsc_queue *q);
 void spsc_release(struct spsc_queue *q);
-bool spsc_overflowed(struct spsc_queue *q);

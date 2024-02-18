@@ -1,0 +1,25 @@
+.program triggergen
+.wrap_target
+  set pins, 1 [31]
+  set pins, 3 [31]
+  set pins, 2 [31]
+  set pins, 0 [31]
+.wrap
+
+  
+% c-sdk {
+static inline void triggergen_program_init(PIO pio, uint sm, uint offset, uint start_pin, uint pin_count) {
+    pio_sm_config c = triggergen_program_get_default_config(offset);
+
+    sm_config_set_out_pins(&c, start_pin, pin_count);
+    sm_config_set_set_pins(&c, start_pin, pin_count);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
+    for (uint i = start_pin; i < start_pin + pin_count; i++) {
+      pio_gpio_init(pio, i);
+    }
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_consecutive_pindirs(pio, sm, start_pin, pin_count, true);
+    pio_sm_set_clkdiv_int_frac(pio, sm, 255, 0);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}

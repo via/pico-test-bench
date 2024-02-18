@@ -8,6 +8,7 @@
 
 
 void setup_input_capture(void);
+void setup_trigger_output(void);
 
 int main() {
     stdio_init_all();
@@ -17,6 +18,7 @@ int main() {
     set_sys_clock_khz(128000, true);
     printf("Start!\n");
     setup_input_capture();
+    setup_trigger_output();
 
     uint32_t count = 0;
     uint32_t overflows = 0;
@@ -25,8 +27,9 @@ int main() {
         int index = spsc_next(&change_buffer_queue);
         struct changebuf *buf = &change_buffers[index];
         count += 1;
-        overflows += (buf->overflowed ? 1 : 0);
-        printf("spent %d, count %d, ovf: %d\n", buf->time_us, buf->count, overflows);
+        for (int i = 0; i < buf->count; i++) {
+          printf("%u %x (%d)\n", buf->changes[i].time, buf->changes[i].value, atomic_load_explicit(&change_buffer_queue.overflows, memory_order_relaxed));
+        }
         spsc_release(&change_buffer_queue);
       }
     }
