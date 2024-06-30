@@ -1,11 +1,15 @@
 #include "spsc.h"
 
 bool spsc_is_empty(const struct spsc_queue *q) {
-  return (q->read == q->write);
+  const int read = atomic_load_explicit(&q->read, memory_order_relaxed);
+  const int write = atomic_load_explicit(&q->write, memory_order_relaxed);
+  return (read == write);
 }
 
 bool spsc_is_full(const struct spsc_queue *q) {
-  return (q->read == ((q->write + 1) % q->size));
+  const int read = atomic_load_explicit(&q->read, memory_order_relaxed);
+  const int write = atomic_load_explicit(&q->write, memory_order_relaxed);
+  return (read == ((write + 1) & q->mask));
 }
 
 static void spsc_overflow(struct spsc_queue *q) {

@@ -5,7 +5,7 @@
 #include "spsc.h"
 
 struct change {
-  uint32_t time;
+  uint16_t time_offset;
   uint32_t value;
 };
 
@@ -14,7 +14,7 @@ struct changebuf {
   struct change changes[MAX_CHANGES_PER_BUF];
   size_t count;
   bool overflowed;
-  uint32_t time_us;
+  uint32_t start_time;
 };
 
 extern struct spsc_queue change_buffer_queue;

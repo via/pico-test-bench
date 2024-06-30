@@ -4,9 +4,9 @@
 #include <stdbool.h>
 
 struct spsc_queue {
-  int size;
-  _Atomic int read;
-  _Atomic int write;
+  uint32_t mask;
+  _Atomic uint32_t read;
+  _Atomic uint32_t write;
   _Atomic int overflows;
 };
 

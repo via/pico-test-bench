@@ -46,34 +46,31 @@ struct spsc_queue change_buffer_queue = {
 };
 struct changebuf change_buffers[32] = { 0 };
 
-static void write_change(struct changebuf *dst, uint32_t time, uint32_t value) {
+static void write_change(struct changebuf *dst, uint16_t time_offset, uint32_t value) {
   if (dst->count >= MAX_CHANGES_PER_BUF) {
     dst->overflowed = true;
     return;
   }
-  dst->changes[dst->count] = (struct change){.time = time, .value = value};
+  dst->changes[dst->count] = (struct change){.time_offset = time_offset, .value = value};
   dst->count++;
 }
 
-static void collapse_buffer(struct changebuf *dst, uint32_t captures[CAPTURE_COUNT], uint32_t edges[EDGE_COUNT], uint32_t starting_time) {
-  uint32_t before = time_us_32();
+static void collapse_buffer(struct changebuf *dst, uint32_t captures[CAPTURE_COUNT], uint32_t edges[EDGE_COUNT]) {
   for (int i = 0; i < EDGE_COUNT; i++) {
     uint32_t edge = edges[i];
     if (edge != 0) {
       for (int bit = 0; bit < 32; bit++) {
         if ((edge & 0x80000000) != 0) {
           uint32_t position = (32 * i) + bit;
-          write_change(dst, starting_time + position, captures[position]);
+          write_change(dst, position, captures[position]);
         }
         edge <<= 1;
       }
     }
   }
-  uint32_t after = time_us_32();
-  dst->time_us = after - before;
 }
 
-uint32_t time = 0;
+static uint32_t capture_time = 0;
 
 void dma_handler(void) {
   if (dma_channel_get_irq0_status(EDGEDETECT_BUF1_DMA)) {
@@ -86,7 +83,8 @@ void dma_handler(void) {
       struct changebuf *buf = &change_buffers[index];
       buf->count = 0;
       buf->overflowed = false;
-      collapse_buffer(buf, captures_buf1, edges_buf1, time);
+      buf->start_time = capture_time;
+      collapse_buffer(buf, captures_buf1, edges_buf1);
       spsc_push(&change_buffer_queue);
     }
 
@@ -105,7 +103,8 @@ void dma_handler(void) {
       struct changebuf *buf = &change_buffers[index];
       buf->count = 0;
       buf->overflowed = false;
-      collapse_buffer(buf, captures_buf1, edges_buf1, time);
+      buf->start_time = capture_time;
+      collapse_buffer(buf, captures_buf2, edges_buf2);
       spsc_push(&change_buffer_queue);
     }
 
@@ -115,7 +114,7 @@ void dma_handler(void) {
     dma_channel_acknowledge_irq0(EDGEDETECT_BUF2_DMA);
   }
 
-  time += 16000;
+  capture_time += 16000;
 }
 
 static void configure_dma(void) {
