@@ -12,6 +12,9 @@
 void setup_input_capture(void);
 void setup_trigger_output(void);
 
+static void transmit_change_buffer(struct changebuf *b) {}
+
+#if 0
 /* Send a changebuf over usb. Changebufs contain up to 128 change entries
  * spanning 16000 possible times. We encode a time, status fields, a count, and
  * then an array of tuples of time offset and pin values:
@@ -50,11 +53,7 @@ static void transmit_change_buffer(struct changebuf *b) {
   }
 
 }
-
-static void cobs(uint8_t *dest, const uint8_t *src, size_t src_size) {
-  for (const uint8_t *b = src; src_size > 0; src_size--, b++) {
-  }
-}
+#endif
 
 int main() {
     stdio_init_all();
@@ -63,7 +62,6 @@ int main() {
      * clean 16 Msps */
     set_sys_clock_khz(128000, true);
 
-    sleep_ms(10000);
     setup_input_capture();
     setup_trigger_output();
 

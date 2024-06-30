@@ -1,19 +1,19 @@
 #include "spsc.h"
 
+static void spsc_overflow(struct spsc_queue *q) {
+  q->overflows = q->overflows + 1;
+}
+
+static uint32_t spsc_advance(uint32_t idx, uint32_t size) {
+  return (idx == size - 1) ? 0 : idx + 1;
+}
+
 bool spsc_is_empty(const struct spsc_queue *q) {
-  const int read = atomic_load_explicit(&q->read, memory_order_relaxed);
-  const int write = atomic_load_explicit(&q->write, memory_order_relaxed);
-  return (read == write);
+  return (q->read == q->write);
 }
 
 bool spsc_is_full(const struct spsc_queue *q) {
-  const int read = atomic_load_explicit(&q->read, memory_order_relaxed);
-  const int write = atomic_load_explicit(&q->write, memory_order_relaxed);
-  return (read == ((write + 1) & q->mask));
-}
-
-static void spsc_overflow(struct spsc_queue *q) {
-  q->overflows = q->overflows + 1;
+  return (q->read == spsc_advance(q->write, q->size));
 }
 
 
@@ -30,9 +30,7 @@ int spsc_allocate(struct spsc_queue *q) {
 /* Increment queue write pointer.  
  * This assumes a queue index has been allocated and then written */
 void spsc_push(struct spsc_queue *q) {
-  int write = q->write;
-  write = (write + 1) % q->size;
-  q->write = write;
+  q->write = spsc_advance(q->write, q->size);
 }
 
 /* Return index of next queue entry that is ready to be read.  Returns -1 if
@@ -47,8 +45,6 @@ int spsc_next(struct spsc_queue *q) {
 /* Increment read pointer. This assumes the queue is not empty, and any pointer 
  * obtained from a previous spsc_next call is invalidated */
 void spsc_release(struct spsc_queue *q) {
-  int read = q->read;
-  read = (read + 1) % q->size;
-  q->read = read;
+  q->read = spsc_advance(q->read, q->size);
 }
 

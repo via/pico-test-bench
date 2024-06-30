@@ -2,12 +2,13 @@
 
 #include <stdatomic.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 struct spsc_queue {
-  uint32_t mask;
-  _Atomic uint32_t read;
-  _Atomic uint32_t write;
-  _Atomic int overflows;
+  uint32_t size;
+  uint32_t read;
+  uint32_t write;
+  int overflows;
 };
 
 bool spsc_is_empty(const struct spsc_queue *q);
