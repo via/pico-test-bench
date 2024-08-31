@@ -8,9 +8,11 @@
 
 #include "edgedetect.pio.h"
 #include "capture.pio.h"
+#include "triggergen.pio.h"
 
 #include "spsc.h"
 #include "logic.h"
+#include "trigger.h"
 
 
 /* Collect data 1 ms at a time. 
@@ -26,20 +28,29 @@
 #define SAMPLES_PER_SEC 16000000
 
 #define CAPTURE_COUNT (SAMPLES_PER_SEC / 1000)
-static uint32_t captures_buf1[CAPTURE_COUNT];
-static uint32_t captures_buf2[CAPTURE_COUNT];
+static uint32_t captures_buf1[CAPTURE_COUNT] = {0};
+static uint32_t captures_buf2[CAPTURE_COUNT] = {0};
 
 #define EDGE_COUNT (CAPTURE_COUNT / 32)
-static uint32_t edges_buf1[EDGE_COUNT];
-static uint32_t edges_buf2[EDGE_COUNT];
+static uint32_t edges_buf1[EDGE_COUNT] = {0};
+static uint32_t edges_buf2[EDGE_COUNT] = {0};
+
+#define TRIGGERS_PER_MS 4000
+#define TRIGGER_DMA_SIZE (TRIGGERS_PER_MS / 4)
+
+uint8_t trigger_dma_block_1[TRIGGER_DMA_SIZE] = {0};
+uint8_t trigger_dma_block_2[TRIGGER_DMA_SIZE] = {0};
 
 #define CAPTURE_BUF1_DMA 0
 #define CAPTURE_BUF2_DMA 1
 #define EDGEDETECT_BUF1_DMA 2
 #define EDGEDETECT_BUF2_DMA 3
+#define TRIGGERGEN_BUF1_DMA 4
+#define TRIGGERGEN_BUF2_DMA 5
 
 #define CAPTURE_SM 0
 #define EDGEDETECT_SM 1
+#define TRIGGERGEN_SM 2
 
 struct spsc_queue change_buffer_queue = {
   .size = 32,
@@ -114,6 +125,14 @@ void dma_handler(void) {
     dma_channel_acknowledge_irq0(EDGEDETECT_BUF2_DMA);
   }
 
+  if (dma_channel_get_irq0_status(TRIGGERGEN_BUF1_DMA)) {
+    dma_channel_set_read_addr(TRIGGERGEN_BUF1_DMA, trigger_dma_block_1, false); 
+    dma_channel_acknowledge_irq0(TRIGGERGEN_BUF1_DMA);
+  } else if (dma_channel_get_irq0_status(TRIGGERGEN_BUF2_DMA)) {
+    dma_channel_set_read_addr(TRIGGERGEN_BUF2_DMA, trigger_dma_block_2, false); 
+    dma_channel_acknowledge_irq0(TRIGGERGEN_BUF2_DMA);
+  }
+
   capture_time += 16000;
 }
 
@@ -169,13 +188,53 @@ static void configure_dma(void) {
     dma_channel_set_irq0_enabled(EDGEDETECT_BUF2_DMA, true);
   }
 
+  /* Channel 4 is for trigger outputs buf 1*/
+  {
+    dma_channel_claim(TRIGGERGEN_BUF1_DMA);
+    dma_channel_config config = dma_channel_get_default_config(TRIGGERGEN_BUF1_DMA);
+    channel_config_set_read_increment(&config, true);
+    channel_config_set_write_increment(&config, false);
+    channel_config_set_dreq(&config, DREQ_PIO0_TX2);
+    channel_config_set_chain_to(&config, TRIGGERGEN_BUF2_DMA);
+    dma_channel_configure(TRIGGERGEN_BUF1_DMA, &config, &pio0_hw->txf[TRIGGERGEN_SM], trigger_dma_block_1, TRIGGER_DMA_SIZE / 4, true);
+    dma_channel_set_irq0_enabled(TRIGGERGEN_BUF1_DMA, true);
+  }
+
+  /* Channel 5 is for trigger outputs buf 2*/
+  {
+    dma_channel_claim(TRIGGERGEN_BUF2_DMA);
+    dma_channel_config config = dma_channel_get_default_config(TRIGGERGEN_BUF2_DMA);
+    channel_config_set_read_increment(&config, true);
+    channel_config_set_write_increment(&config, false);
+    channel_config_set_dreq(&config, DREQ_PIO0_TX2);
+    channel_config_set_chain_to(&config, TRIGGERGEN_BUF1_DMA);
+    dma_channel_configure(TRIGGERGEN_BUF2_DMA, &config, &pio0_hw->txf[TRIGGERGEN_SM], trigger_dma_block_2, TRIGGER_DMA_SIZE / 4, false);
+    dma_channel_set_irq0_enabled(TRIGGERGEN_BUF2_DMA, true);
+  }
+
   irq_set_exclusive_handler(DMA_IRQ_0, dma_handler);
   irq_set_enabled(DMA_IRQ_0, true);
 
 }
 
-void setup_input_capture(void) {
-    configure_dma();
+
+static void populate_dma_block(uint8_t dest[TRIGGER_DMA_SIZE], struct trigger_block *src) {
+  for (int i = 0; i < src->count; i++) {
+    uint16_t time_offset = trigger_block_get_time_offset(src->triggers[i]);
+    uint8_t trigger = trigger_block_get_triggers(src->triggers[i]);
+    uint8_t shift = (time_offset & 0x3) * 2;
+    dest[time_offset / 4] |= (trigger << shift);
+  }
+}
+
+static void depopulate_dma_block(uint8_t dest[TRIGGER_DMA_SIZE], struct trigger_block *src) {
+  for (int i = 0; i < src->count; i++) {
+    uint16_t time_offset = trigger_block_get_time_offset(src->triggers[i]);
+    dest[time_offset / 4] = 0;
+  }
+}
+
+void setup_input_output_pio(void) {
 
     /* initialize PIO0 with edgedetect */
     PIO pio = pio0;
@@ -191,8 +250,29 @@ void setup_input_capture(void) {
       pio_sm_claim(pio, sm);
       edgedetect_program_init(pio, sm, offset, 0, 24);
     }
-    /* Enable both SMs similtaneously */
+    {
+      uint offset = pio_add_program(pio, &triggergen_program);
+      uint sm = TRIGGERGEN_SM;
+      pio_sm_claim(pio, sm);
+      triggergen_program_init(pio, sm, offset, 27, 2);
+    }
+
+    /*XXX*/
+    trigger_dma_block_1[0] = 0x3;
+    trigger_dma_block_1[10] = 0x1;
+    trigger_dma_block_1[11] = 0x2;
+
+    trigger_dma_block_2[0] = 0x3;
+    trigger_dma_block_2[20] = 0x1;
+    trigger_dma_block_2[21] = 0x2;
+
+    configure_dma();
+
+    /* Enable all SMs similtaneously */
     pio_enable_sm_mask_in_sync(pio, 
         (1 << CAPTURE_SM) | 
-        (1 << EDGEDETECT_SM));
+        (1 << EDGEDETECT_SM) |
+        (1 << TRIGGERGEN_SM));
+
+
 }
