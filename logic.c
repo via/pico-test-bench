@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "pico/stdlib.h"
 #include "hardware/pio.h"
@@ -81,7 +82,24 @@ static void collapse_buffer(struct changebuf *dst, uint32_t captures[CAPTURE_COU
   }
 }
 
+bool next_trigger_before(uint32_t before, uint32_t *dest, uint8_t *trg);
+
+static void populate_trigger_block(uint8_t dest[TRIGGER_DMA_SIZE], uint32_t start_time) {
+
+  memset(dest, 0, TRIGGER_DMA_SIZE);
+  uint32_t end_time = start_time + 4000;
+  uint32_t time;
+  uint8_t value;
+  while (next_trigger_before(end_time, &time, &value)) {
+    uint32_t time_offset = time - start_time;
+    uint8_t shift = (time_offset & 0x3) * 2;
+    dest[time_offset / 4] |= (value << shift);
+  }
+}
+
+
 static uint32_t capture_time = 0;
+static uint32_t trigger_time = 0;
 
 void dma_handler(void) {
   if (dma_channel_get_irq0_status(EDGEDETECT_BUF1_DMA)) {
@@ -104,6 +122,8 @@ void dma_handler(void) {
     dma_channel_set_write_addr(CAPTURE_BUF1_DMA, captures_buf1, false); 
     dma_channel_acknowledge_irq0(CAPTURE_BUF1_DMA);
 
+    capture_time += 16000;
+
   } else if (dma_channel_get_irq0_status(EDGEDETECT_BUF2_DMA)) {
     if (!dma_channel_get_irq0_status(CAPTURE_BUF2_DMA)) {
       abort();
@@ -123,17 +143,22 @@ void dma_handler(void) {
     dma_channel_acknowledge_irq0(CAPTURE_BUF2_DMA);
     dma_channel_set_write_addr(EDGEDETECT_BUF2_DMA, edges_buf2, false); 
     dma_channel_acknowledge_irq0(EDGEDETECT_BUF2_DMA);
+
+    capture_time += 16000;
   }
 
   if (dma_channel_get_irq0_status(TRIGGERGEN_BUF1_DMA)) {
+    populate_trigger_block(trigger_dma_block_1, 8000 + (capture_time / 4));
     dma_channel_set_read_addr(TRIGGERGEN_BUF1_DMA, trigger_dma_block_1, false); 
     dma_channel_acknowledge_irq0(TRIGGERGEN_BUF1_DMA);
+    trigger_time += 4000;
   } else if (dma_channel_get_irq0_status(TRIGGERGEN_BUF2_DMA)) {
+    populate_trigger_block(trigger_dma_block_2, 8000 + (capture_time / 4));
     dma_channel_set_read_addr(TRIGGERGEN_BUF2_DMA, trigger_dma_block_2, false); 
     dma_channel_acknowledge_irq0(TRIGGERGEN_BUF2_DMA);
+    trigger_time += 4000;
   }
 
-  capture_time += 16000;
 }
 
 static void configure_dma(void) {
@@ -217,23 +242,6 @@ static void configure_dma(void) {
 
 }
 
-
-static void populate_dma_block(uint8_t dest[TRIGGER_DMA_SIZE], struct trigger_block *src) {
-  for (int i = 0; i < src->count; i++) {
-    uint16_t time_offset = trigger_block_get_time_offset(src->triggers[i]);
-    uint8_t trigger = trigger_block_get_triggers(src->triggers[i]);
-    uint8_t shift = (time_offset & 0x3) * 2;
-    dest[time_offset / 4] |= (trigger << shift);
-  }
-}
-
-static void depopulate_dma_block(uint8_t dest[TRIGGER_DMA_SIZE], struct trigger_block *src) {
-  for (int i = 0; i < src->count; i++) {
-    uint16_t time_offset = trigger_block_get_time_offset(src->triggers[i]);
-    dest[time_offset / 4] = 0;
-  }
-}
-
 void setup_input_output_pio(void) {
 
     /* initialize PIO0 with edgedetect */
@@ -242,29 +250,23 @@ void setup_input_output_pio(void) {
       uint offset = pio_add_program(pio, &capture_program);
       uint sm = CAPTURE_SM;
       pio_sm_claim(pio, sm);
-      capture_program_init(pio, sm, offset, 0, 24);
+      capture_program_init(pio, sm, offset, 4, 18);
     }
     {
       uint offset = pio_add_program(pio, &edgedetect_program);
       uint sm = EDGEDETECT_SM;
       pio_sm_claim(pio, sm);
-      edgedetect_program_init(pio, sm, offset, 0, 24);
+      edgedetect_program_init(pio, sm, offset, 4, 18);
     }
     {
       uint offset = pio_add_program(pio, &triggergen_program);
       uint sm = TRIGGERGEN_SM;
       pio_sm_claim(pio, sm);
-      triggergen_program_init(pio, sm, offset, 27, 2);
+      triggergen_program_init(pio, sm, offset, 4, 2);
     }
 
-    /*XXX*/
-    trigger_dma_block_1[0] = 0x3;
-    trigger_dma_block_1[10] = 0x1;
-    trigger_dma_block_1[11] = 0x2;
-
-    trigger_dma_block_2[0] = 0x3;
-    trigger_dma_block_2[20] = 0x1;
-    trigger_dma_block_2[21] = 0x2;
+    populate_trigger_block(trigger_dma_block_1, 0);
+    populate_trigger_block(trigger_dma_block_2, 4000);
 
     configure_dma();
 

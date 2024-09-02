@@ -59,12 +59,15 @@ static void cobs_encode(char buffer[static 1024], size_t n) {
 }
 
 
+
 int main() {
     stdio_init_all();
 
     /* Set 128 MHz clock, this allows a /2 divider for the PIO0 SMs, giving a
      * clean 16 Msps */
     set_sys_clock_khz(128000, true);
+
+    getchar();
 
     setup_input_output_pio();
 
