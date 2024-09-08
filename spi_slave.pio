@@ -1,0 +1,59 @@
+.program spi_slave
+
+; SPI Slave, CPOL=0, CPHA=0, 16 bits
+; - IN pin 0 is the data pin  (MOSI)
+; - IN pin 1 is the clock pin 
+; - OUT pin 0 is data pin     (MISO)
+; - JMP pin is the chip select 
+; - Autopush is enabled
+; example: GP0 as MISO, 
+;          GP1 as nCS
+;          GP2 as MOSI
+;          GP3 as SCLK
+
+; 
+; This program waits for chip select to be asserted (low) before it begins 
+; clocking in data. Whilst chip select is low, data is clocked continuously. If 
+; chip select is deasserted part way through a data byte, the partial data is 
+; discarded. This makes use of the fact a mov to isr clears the input shift 
+; counter.
+
+flush:     
+  mov isr, null         ; Clear ISR and input shift counter     
+  jmp check_chip_select ; Poll chip select again 
+
+.wrap_target 
+do_bit:     
+  wait 0 pin 1          ; Detect rising edge and sample input data     
+  out pins, 1
+  wait 1 pin 1          ; (autopush takes care of moving each complete     
+  in pins, 1            ; data byte to the FIFO) 
+
+check_chip_select:     
+  jmp pin, flush        ; Bail out if we see chip select high 
+.wrap
+
+
+% c-sdk {
+static inline void spi_slave_program_init(PIO pio, uint sm, uint offset, uint start_pin) {
+    pio_sm_config c = spi_slave_program_get_default_config(offset);
+    const uint miso_pin = start_pin;
+    const uint ncs_pin = start_pin + 1;
+    const uint mosi_pin = start_pin + 2;
+    const uint sclk_pin = start_pin + 3;
+
+    sm_config_set_out_pins(&c, miso_pin, 1);
+    sm_config_set_out_shift(&c, false, true, 16);
+
+    sm_config_set_in_pins(&c, mosi_pin);
+    sm_config_set_in_shift(&c, false, true, 16);
+
+    sm_config_set_jmp_pin(&c, ncs_pin);
+
+    pio_gpio_init(pio, miso_pin);
+
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_consecutive_pindirs(pio, sm, start_pin, 1, true);
+//    pio_sm_set_consecutive_pindirs(pio, sm, start_pin + 1, 3, false);
+}
+%}

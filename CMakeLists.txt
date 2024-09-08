@@ -13,6 +13,7 @@ add_executable(
     logic.c
     trigger.c
     spsc.c
+    collapse.c
 )
 target_compile_options(pico-logic-analyzer PRIVATE
   -Wall -Wextra)
@@ -31,11 +32,17 @@ pico_generate_pio_header(
     ${CMAKE_CURRENT_LIST_DIR}/triggergen.pio
 )
 
+pico_generate_pio_header(
+    pico-logic-analyzer
+    ${CMAKE_CURRENT_LIST_DIR}/spi_slave.pio
+)
+
 target_link_libraries(
   pico-logic-analyzer 
   pico_stdlib
   hardware_pio
   hardware_dma
+  hardware_spi
 )
 
 pico_enable_stdio_usb(pico-logic-analyzer 1)

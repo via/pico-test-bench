@@ -60,13 +60,35 @@ static void cobs_encode(char buffer[static 1024], size_t n) {
 
 
 
+#if 0
+#include "collapse.h"
+
+struct collapsed collapsed[4000];
+uint32_t samples[4000] = { 0 };
+#endif
+
 int main() {
     stdio_init_all();
 
     /* Set 128 MHz clock, this allows a /2 divider for the PIO0 SMs, giving a
      * clean 16 Msps */
+//    for (int i = 0; i < 4000; i++) {
+//      samples[i] = i;
+//    }
+
     set_sys_clock_khz(128000, true);
 
+#if 0
+    while(true) {
+      uint32_t us_before = time_us_32();
+      uint32_t count = collapse(0, samples, collapsed);
+      uint32_t us_after = time_us_32();
+
+      printf("%d, %d us\n", count, us_after - us_before);
+    }
+#endif
+
+#if 1
     getchar();
 
     setup_input_output_pio();
@@ -79,5 +101,6 @@ int main() {
         spsc_release(&change_buffer_queue);
       }
     }
+#endif
     return 0;
 }

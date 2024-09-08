@@ -2,7 +2,7 @@
   nop [1] // Delay collection by 2 cycles to match edgedetect
 .wrap_target
 start:
-  in pins, 32 [3]
+  in pins, 18 [3]
 .wrap
   
 % c-sdk {
@@ -10,7 +10,7 @@ static inline void capture_program_init(PIO pio, uint sm, uint offset, uint star
     pio_sm_config c = capture_program_get_default_config(offset);
 
     sm_config_set_in_pins(&c, start_pin);
-    sm_config_set_in_shift(&c, false, true, 32);
+    sm_config_set_in_shift(&c, false, true, 18);
     sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
     for (uint i = start_pin; i < start_pin + pin_count; i++) {
       gpio_pull_down(i);
