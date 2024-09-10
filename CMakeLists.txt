@@ -13,18 +13,12 @@ add_executable(
     logic.c
     trigger.c
     spsc.c
-    collapse.c
 )
 target_compile_options(pico-logic-analyzer PRIVATE
   -Wall -Wextra)
 pico_generate_pio_header(
     pico-logic-analyzer 
     ${CMAKE_CURRENT_LIST_DIR}/capture.pio
-)
-
-pico_generate_pio_header(
-    pico-logic-analyzer
-    ${CMAKE_CURRENT_LIST_DIR}/edgedetect.pio
 )
 
 pico_generate_pio_header(
