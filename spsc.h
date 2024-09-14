@@ -6,8 +6,8 @@
 
 struct spsc_queue {
   uint32_t size;
-  uint32_t read;
-  uint32_t write;
+  _Atomic uint32_t read;
+  _Atomic uint32_t write;
   int overflows;
 };
 

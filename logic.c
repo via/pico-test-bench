@@ -97,6 +97,48 @@ static void populate_trigger_block(uint8_t dest[TRIGGER_DMA_SIZE], uint32_t star
 }
 
 
+static uint32_t spi_index_plus_one(uint32_t val) {
+  val += 1;
+  if (val == SPI_SAMPLES) {
+    return 0;
+  } else {
+    return val;
+  }
+}
+
+#define TLV2553_SPI_REQ(pin) ((uint32_t)((pin << 12) | 0x0c00))
+static uint32_t find_first_spi_index(uint32_t samples[SPI_SAMPLES]) {
+  for (int i = 0; i < SPI_SAMPLES; i++) {
+    if (samples[i] == TLV2553_SPI_REQ(11)) {
+      return spi_index_plus_one(i);
+    }
+  }
+  return 0;
+}
+
+uint32_t vals[SPI_SAMPLES] = {
+  0, 0, 2063,
+  0, 0, 0,
+  0, 0, 0,
+  0, 0, 0,
+  0, 0, 0,
+  0, 0, 0,
+  0, 0, 0,
+  0, 0, 0,
+  0, 0, 0,
+  0, 0, 2048,
+};
+
+
+static void populate_spi_tx(uint32_t tx[SPI_SAMPLES], uint32_t rx[SPI_SAMPLES]) {
+  uint32_t idx = find_first_spi_index(rx);
+  for (uint32_t src_idx = 0, dst_idx = idx; src_idx < SPI_SAMPLES;
+       src_idx++,
+       dst_idx = spi_index_plus_one(dst_idx)) {
+    tx[spi_index_plus_one(dst_idx)] = vals[src_idx] << 20;
+  }
+}
+
 static uint32_t capture_time = 0;
 static uint32_t trigger_time = 0;
 static uint32_t last_capture = 0;
@@ -149,10 +191,12 @@ void dma0_handler(void) {
   }
 
   if (dma_channel_get_irq0_status(SPI_RX_BUF1_DMA)) {
+    populate_spi_tx(spi_tx_dma_1, spi_rx_dma_1);
     dma_channel_set_write_addr(SPI_RX_BUF1_DMA, spi_rx_dma_1, false); 
     dma_channel_acknowledge_irq0(SPI_RX_BUF1_DMA);
   }
   if (dma_channel_get_irq0_status(SPI_RX_BUF2_DMA)) {
+    populate_spi_tx(spi_tx_dma_2, spi_rx_dma_2);
     dma_channel_set_write_addr(SPI_RX_BUF2_DMA, spi_rx_dma_2, false); 
     dma_channel_acknowledge_irq0(SPI_RX_BUF2_DMA);
   }
@@ -292,17 +336,11 @@ void setup_input_output_pio(void) {
     populate_trigger_block(trigger_dma_block_1, 0);
     populate_trigger_block(trigger_dma_block_2, 4000);
 
-    /* TODO: For now just always send 2048 */
-    for (int i = 0; i < 30; i++) {
-      spi_tx_dma_1[i] = 2048 << (4 + 16);
-      spi_tx_dma_2[i] = 2048 << (4 + 16);
-    }
-
     configure_dma();
 
     /* Enable all SMs similtaneously */
     pio_enable_sm_mask_in_sync(pio, 
-        (1 << CAPTURE_SM) | 
+//        (1 << CAPTURE_SM) | 
         (1 << TRIGGERGEN_SM) |
         (1 << SPI_SM));
 

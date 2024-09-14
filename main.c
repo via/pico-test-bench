@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "pico/stdlib.h"
+#include "pico/multicore.h"
 #include "hardware/clocks.h"
 
 #include "logic.h"
@@ -36,6 +37,8 @@ static void send_uint16(uint16_t val) {
   putchar_raw(val & 0xFF);
 }
 
+const char *to_parse = "a 0 0 0 0 10 0 0 0 0 52 0 0 0 0 0 0";
+
 static uint8_t bleh[] = "HELO";
 static void transmit_change_buffer(struct changebuf *b) {
   
@@ -58,17 +61,47 @@ static void cobs_encode(char buffer[static 1024], size_t n) {
 
 }
 
+_Atomic uint32_t started = 0;
 
+void main_cpu1(void) {
+  #if 0
+  while (true) {
+    uint32_t delay;
+    uint8_t trigger;
+    uint8_t blah;
+    int ret = fread(&blah, 1, 1, stdin);
+    putchar_raw('.');
+    switch (blah) {
+      case 'T': {
+                  fread(&delay, sizeof(delay), 1, stdin);
+                  putchar_raw(',');
+                  fread(&trigger, sizeof(trigger), 1, stdin);
+                  putchar_raw(',');
+                  started = 1;
+                  break;
+                }
+      default:
+                putchar_raw(blah);
+                break;
+    }
+  }
+#endif
+    setup_input_output_pio();
 
+    while (true) {
+      getchar();
+    }
+}
 
 int main() {
-    stdio_init_all();
 
     set_sys_clock_khz(128000, true);
 
-    getchar();
+    stdio_init_all();
 
-    setup_input_output_pio();
+    getchar();
+    
+    multicore_launch_core1(main_cpu1);
 
     while (true) {
       if (!spsc_is_empty(&change_buffer_queue)) {

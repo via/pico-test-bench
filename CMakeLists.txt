@@ -34,6 +34,7 @@ pico_generate_pio_header(
 target_link_libraries(
   pico-logic-analyzer 
   pico_stdlib
+  pico_multicore
   hardware_pio
   hardware_dma
   hardware_spi
