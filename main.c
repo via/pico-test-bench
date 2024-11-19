@@ -101,7 +101,7 @@ int main() {
 
     getchar();
     
-    multicore_launch_core1(main_cpu1);
+//    multicore_launch_core1(main_cpu1);
 
     while (true) {
       if (!spsc_is_empty(&change_buffer_queue)) {

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "hardware/irq.h"
 #include "pico/stdlib.h"
 #include "hardware/pio.h"
 #include "hardware/dma.h"
@@ -189,26 +190,27 @@ void dma0_handler(void) {
     dma_channel_acknowledge_irq0(TRIGGERGEN_BUF2_DMA);
     trigger_time += 4000;
   }
+}
 
-  if (dma_channel_get_irq0_status(SPI_RX_BUF1_DMA)) {
+void dma1_handler(void) {
+  if (dma_channel_get_irq1_status(SPI_RX_BUF1_DMA)) {
     populate_spi_tx(spi_tx_dma_1, spi_rx_dma_1);
     dma_channel_set_write_addr(SPI_RX_BUF1_DMA, spi_rx_dma_1, false); 
-    dma_channel_acknowledge_irq0(SPI_RX_BUF1_DMA);
+    dma_channel_acknowledge_irq1(SPI_RX_BUF1_DMA);
   }
-  if (dma_channel_get_irq0_status(SPI_RX_BUF2_DMA)) {
+  if (dma_channel_get_irq1_status(SPI_RX_BUF2_DMA)) {
     populate_spi_tx(spi_tx_dma_2, spi_rx_dma_2);
     dma_channel_set_write_addr(SPI_RX_BUF2_DMA, spi_rx_dma_2, false); 
-    dma_channel_acknowledge_irq0(SPI_RX_BUF2_DMA);
+    dma_channel_acknowledge_irq1(SPI_RX_BUF2_DMA);
   }
-  if (dma_channel_get_irq0_status(SPI_TX_BUF1_DMA)) {
+  if (dma_channel_get_irq1_status(SPI_TX_BUF1_DMA)) {
     dma_channel_set_read_addr(SPI_TX_BUF1_DMA, spi_tx_dma_1, false); 
-    dma_channel_acknowledge_irq0(SPI_TX_BUF1_DMA);
+    dma_channel_acknowledge_irq1(SPI_TX_BUF1_DMA);
   }
-  if (dma_channel_get_irq0_status(SPI_TX_BUF2_DMA)) {
+  if (dma_channel_get_irq1_status(SPI_TX_BUF2_DMA)) {
     dma_channel_set_read_addr(SPI_TX_BUF2_DMA, spi_tx_dma_2, false); 
-    dma_channel_acknowledge_irq0(SPI_TX_BUF2_DMA);
+    dma_channel_acknowledge_irq1(SPI_TX_BUF2_DMA);
   }
-
 }
 
 static void configure_dma(void) {
@@ -270,7 +272,7 @@ static void configure_dma(void) {
     channel_config_set_dreq(&config, DREQ_PIO0_RX3);
     channel_config_set_chain_to(&config, SPI_RX_BUF2_DMA);
     dma_channel_configure(SPI_RX_BUF1_DMA, &config, spi_rx_dma_1, &pio0_hw->rxf[SPI_SM], SPI_SAMPLES, true);
-    dma_channel_set_irq0_enabled(SPI_RX_BUF1_DMA, true);
+    dma_channel_set_irq1_enabled(SPI_RX_BUF1_DMA, true);
   }
   {
     dma_channel_claim(SPI_RX_BUF2_DMA);
@@ -280,7 +282,7 @@ static void configure_dma(void) {
     channel_config_set_dreq(&config, DREQ_PIO0_RX3);
     channel_config_set_chain_to(&config, SPI_RX_BUF1_DMA);
     dma_channel_configure(SPI_RX_BUF2_DMA, &config, spi_rx_dma_2, &pio0_hw->rxf[SPI_SM], SPI_SAMPLES, false);
-    dma_channel_set_irq0_enabled(SPI_RX_BUF2_DMA, true);
+    dma_channel_set_irq1_enabled(SPI_RX_BUF2_DMA, true);
   }
 
   /* Channel 8 and 9 are for SPI TX */
@@ -292,7 +294,7 @@ static void configure_dma(void) {
     channel_config_set_dreq(&config, DREQ_PIO0_TX3);
     channel_config_set_chain_to(&config, SPI_TX_BUF2_DMA);
     dma_channel_configure(SPI_TX_BUF1_DMA, &config, &pio0_hw->txf[SPI_SM], spi_tx_dma_1, SPI_SAMPLES, true);
-    dma_channel_set_irq0_enabled(SPI_TX_BUF1_DMA, true);
+    dma_channel_set_irq1_enabled(SPI_TX_BUF1_DMA, true);
   }
   {
     dma_channel_claim(SPI_TX_BUF2_DMA);
@@ -302,11 +304,16 @@ static void configure_dma(void) {
     channel_config_set_dreq(&config, DREQ_PIO0_TX3);
     channel_config_set_chain_to(&config, SPI_TX_BUF1_DMA);
     dma_channel_configure(SPI_TX_BUF2_DMA, &config, &pio0_hw->txf[SPI_SM], spi_tx_dma_2, SPI_SAMPLES, false);
-    dma_channel_set_irq0_enabled(SPI_TX_BUF2_DMA, true);
+    dma_channel_set_irq1_enabled(SPI_TX_BUF2_DMA, true);
   }
 
   irq_set_exclusive_handler(DMA_IRQ_0, dma0_handler);
   irq_set_enabled(DMA_IRQ_0, true);
+  irq_set_priority(DMA_IRQ_0, 0xff);
+
+  irq_set_exclusive_handler(DMA_IRQ_1, dma1_handler);
+  irq_set_enabled(DMA_IRQ_1, true);
+  irq_set_priority(DMA_IRQ_1, 0x00);
 
 }
 
@@ -340,7 +347,7 @@ void setup_input_output_pio(void) {
 
     /* Enable all SMs similtaneously */
     pio_enable_sm_mask_in_sync(pio, 
-//        (1 << CAPTURE_SM) | 
+        (1 << CAPTURE_SM) | 
         (1 << TRIGGERGEN_SM) |
         (1 << SPI_SM));
 

@@ -20,6 +20,7 @@
 
 flush:     
   mov isr, null         ; Clear ISR and input shift counter     
+  pull
   jmp check_chip_select ; Poll chip select again 
 
 .wrap_target 
