@@ -1,96 +1,98 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "device/usbd.h"
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
 #include "hardware/clocks.h"
+
+#include "test-bench-interfaces.pb.h"
+#include "pb_common.h"
+#include "pb_encode.h"
+#include "pb_decode.h"
+
+#include "cobs.h"
 
 #include "logic.h"
 
 
 void setup_input_output_pio(void);
 
-#if 0
-static void transmit_change_buffer(struct changebuf *b) {}
-#endif
-
-/* Send a changebuf over usb. Changebufs contain up to 128 change entries
- * spanning 4000 possible times. We encode a time, status fields, a count, and
- * then an array of tuples of time offset and pin values:
- * time - uint32 - time of first slot in buffer. If this is not 16000 past the
- *                 last received buffer, a buffer was dropped
- * count - uint8 - count of values in buffer. >128 means the buffer overflowed
- *                 and thus events were dropped
- * array of [count] tuples:
- *   time offset - uint16 - time offset from start time
- *   data - uint32 - pin values
- */
 static void send_uint32(uint32_t val) {
-  putchar_raw((val >> 24) & 0xFF);
+  putchar_raw(val & 0xFF);
+  putchar_raw((val >> 8) & 0xFF);
   putchar_raw((val >> 16) & 0xFF);
-  putchar_raw((val >> 8) & 0xFF);
-  putchar_raw(val & 0xFF);
+  putchar_raw((val >> 24) & 0xFF);
 }
 
-static void send_uint16(uint16_t val) {
-  putchar_raw((val >> 8) & 0xFF);
-  putchar_raw(val & 0xFF);
+static uint32_t recv_uint32() {
+  uint32_t result = 0;
+  result |= (getchar() & 0xff);
+  result |= (getchar() & 0xff) << 8;
+  result |= (getchar() & 0xff) << 16;
+  result |= (getchar() & 0xff) << 24;
+  return result;
 }
 
-const char *to_parse = "a 0 0 0 0 10 0 0 0 0 52 0 0 0 0 0 0";
+_Atomic uint32_t rxcount = 0;
 
-static uint8_t bleh[] = "HELO";
 static void transmit_change_buffer(struct changebuf *b) {
-  
-  putchar_raw(bleh[0]);
-  putchar_raw(bleh[1]);
-  putchar_raw(bleh[2]);
-  putchar_raw(bleh[3]);
+  uint32_t time = time_us_32();
+  Status msg = Status_init_default;
+  msg.cputime = time;
+  msg.state = State_Stopped;
+  msg.command_count = rxcount;
 
-  send_uint32(b->start_time);
-  send_uint32(b->count);
+  uint8_t buffer[Status_size];
+  pb_ostream_t stream = pb_ostream_from_buffer(buffer, sizeof(buffer));
 
-  for (size_t i = 0; i < b->count; i++) {
-   send_uint16(b->changes[i].time_offset);
-   send_uint32(b->changes[i].value);
+  pb_encode(&stream, Status_fields, &msg);
+
+  uint8_t cobsbuffer[COBS_ENCODE_MAX(Status_size)];
+  unsigned int cobslen = 0;
+  cobs_encode(buffer, stream.bytes_written, cobsbuffer, sizeof(cobsbuffer), &cobslen); 
+  for (int i = 0; i < cobslen; i++) {
+    putchar_raw(cobsbuffer[i]);
   }
 
 }
 
-static void cobs_encode(char buffer[static 1024], size_t n) {
+static void handle_command(uint8_t *buf, size_t size) {
+  if (size > Command_size) {
+    return;
+  }
 
+  pb_istream_t stream = pb_istream_from_buffer(buf, size);
+
+  Command cmd = Command_init_default;
+  bool status = pb_decode(&stream, Command_fields, &cmd);
+  if (!status) {
+    return;
+  }
+  rxcount += 1;
 }
 
-_Atomic uint32_t started = 0;
+static void try_input(void) {
+  static uint8_t buffer[COBS_ENCODE_MAX(Command_size)];
+  static size_t size = 0;
+  uint8_t next = getchar_timeout_us(10);
+  if (next == '\0') {
+    unsigned int decoded_len;
+    buffer[size] = next;
+    size += 1;
+    cobs_decode(buffer, size, buffer, sizeof(buffer), &decoded_len); 
+    handle_command(buffer, decoded_len);
+    size = 0;
+  } else if (size >= sizeof(buffer)) {
+    size = 0;
+  } else {
+    buffer[size] = next;
+    size += 1;
+  }
+}
+
 
 void main_cpu1(void) {
-  #if 0
-  while (true) {
-    uint32_t delay;
-    uint8_t trigger;
-    uint8_t blah;
-    int ret = fread(&blah, 1, 1, stdin);
-    putchar_raw('.');
-    switch (blah) {
-      case 'T': {
-                  fread(&delay, sizeof(delay), 1, stdin);
-                  putchar_raw(',');
-                  fread(&trigger, sizeof(trigger), 1, stdin);
-                  putchar_raw(',');
-                  started = 1;
-                  break;
-                }
-      default:
-                putchar_raw(blah);
-                break;
-    }
-  }
-#endif
-    setup_input_output_pio();
-
-    while (true) {
-      getchar();
-    }
 }
 
 int main() {
@@ -99,7 +101,7 @@ int main() {
 
     stdio_init_all();
 
-    getchar();
+    setup_input_output_pio();
     
 //    multicore_launch_core1(main_cpu1);
 
@@ -109,6 +111,8 @@ int main() {
         struct changebuf *buf = &change_buffers[index];
         transmit_change_buffer(buf);
         spsc_release(&change_buffer_queue);
+      } else {
+        try_input();
       }
     }
     return 0;

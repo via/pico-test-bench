@@ -313,7 +313,7 @@ static void configure_dma(void) {
 
   irq_set_exclusive_handler(DMA_IRQ_1, dma1_handler);
   irq_set_enabled(DMA_IRQ_1, true);
-  irq_set_priority(DMA_IRQ_1, 0x00);
+  irq_set_priority(DMA_IRQ_1, 0xff);
 
 }
 

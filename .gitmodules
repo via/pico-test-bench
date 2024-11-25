@@ -1,3 +1,9 @@
 [submodule "pico-sdk"]
 	path = pico-sdk
 	url = https://github.com/raspberrypi/pico-sdk
+[submodule "nanopb"]
+	path = nanopb
+	url = https://github.com/nanopb/nanopb/
+[submodule "nanocobs"]
+	path = nanocobs
+	url = https://github.com/charlesnicholson/nanocobs.git

@@ -4,6 +4,10 @@ include(pico-sdk/pico_sdk_init.cmake)
 
 project(pico-logic-analyzer)
 
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/nanopb/extra)
+find_package(Nanopb REQUIRED)
+nanopb_generate_cpp(TARGET test-bench-interfaces test-bench-interfaces.proto)
+
 # initialize the Raspberry Pi Pico SDK
 pico_sdk_init()
 
@@ -13,7 +17,11 @@ add_executable(
     logic.c
     trigger.c
     spsc.c
+    nanocobs/cobs.c
 )
+
+target_include_directories(pico-logic-analyzer PRIVATE nanocobs)
+
 target_compile_options(pico-logic-analyzer PRIVATE
   -Wall -Wextra)
 pico_generate_pio_header(
@@ -33,6 +41,7 @@ pico_generate_pio_header(
 
 target_link_libraries(
   pico-logic-analyzer 
+  test-bench-interfaces
   pico_stdlib
   pico_multicore
   hardware_pio
