@@ -13,8 +13,11 @@ def read_until_zero():
         buffer += n
     return buffer
 
+read_until_zero()
+
 while True:
     buffer = read_until_zero()
+    print(buffer)
     decoded = cobs.decode(buffer)
     msg = Status()
     msg.ParseFromString(decoded)

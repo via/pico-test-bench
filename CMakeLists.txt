@@ -17,10 +17,12 @@ add_executable(
     logic.c
     trigger.c
     spsc.c
+    usb_descriptors.c
     nanocobs/cobs.c
 )
 
 target_include_directories(pico-logic-analyzer PRIVATE nanocobs)
+target_include_directories(pico-logic-analyzer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_compile_options(pico-logic-analyzer PRIVATE
   -Wall -Wextra)
@@ -47,9 +49,11 @@ target_link_libraries(
   hardware_pio
   hardware_dma
   hardware_spi
+  tinyusb_device
+  tinyusb_board
 )
 
-pico_enable_stdio_usb(pico-logic-analyzer 1)
+pico_enable_stdio_usb(pico-logic-analyzer 0)
 pico_enable_stdio_uart(pico-logic-analyzer 0)
 pico_add_extra_outputs(pico-logic-analyzer)
 

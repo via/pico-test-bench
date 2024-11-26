@@ -1,10 +1,13 @@
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "device/usbd.h"
+#include "class/cdc/cdc_device.h"
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
 #include "hardware/clocks.h"
+
+#include "bsp/board_api.h"
+#include "tusb.h"
+#include "usb_descriptors.h"
 
 #include "test-bench-interfaces.pb.h"
 #include "pb_common.h"
@@ -17,22 +20,6 @@
 
 
 void setup_input_output_pio(void);
-
-static void send_uint32(uint32_t val) {
-  putchar_raw(val & 0xFF);
-  putchar_raw((val >> 8) & 0xFF);
-  putchar_raw((val >> 16) & 0xFF);
-  putchar_raw((val >> 24) & 0xFF);
-}
-
-static uint32_t recv_uint32() {
-  uint32_t result = 0;
-  result |= (getchar() & 0xff);
-  result |= (getchar() & 0xff) << 8;
-  result |= (getchar() & 0xff) << 16;
-  result |= (getchar() & 0xff) << 24;
-  return result;
-}
 
 _Atomic uint32_t rxcount = 0;
 
@@ -51,9 +38,12 @@ static void transmit_change_buffer(struct changebuf *b) {
   uint8_t cobsbuffer[COBS_ENCODE_MAX(Status_size)];
   unsigned int cobslen = 0;
   cobs_encode(buffer, stream.bytes_written, cobsbuffer, sizeof(cobsbuffer), &cobslen); 
-  for (int i = 0; i < cobslen; i++) {
-    putchar_raw(cobsbuffer[i]);
+  if (tud_cdc_write_available() < cobslen) {
+    return false;
   }
+  tud_cdc_write(cobsbuffer, cobslen);
+  tud_cdc_write_flush();
+  return true;
 
 }
 
@@ -75,7 +65,7 @@ static void handle_command(uint8_t *buf, size_t size) {
 static void try_input(void) {
   static uint8_t buffer[COBS_ENCODE_MAX(Command_size)];
   static size_t size = 0;
-  uint8_t next = getchar_timeout_us(10);
+  uint8_t next = 1; // getchar_timeout_us(10);
   if (next == '\0') {
     unsigned int decoded_len;
     buffer[size] = next;
@@ -95,24 +85,34 @@ static void try_input(void) {
 void main_cpu1(void) {
 }
 
+static uint32_t count = 0;
+static uint8_t buffer[128];
+void tud_cdc_rx_cb(uint8_t itf) {
+  rxcount += tud_cdc_n_read(itf, buffer, 128);
+}
+
 int main() {
 
     set_sys_clock_khz(128000, true);
 
-    stdio_init_all();
+
+    tud_init(BOARD_TUD_RHPORT);
+    if (board_init_after_tusb) {
+      board_init_after_tusb();
+    }
 
     setup_input_output_pio();
     
 //    multicore_launch_core1(main_cpu1);
 
     while (true) {
+      tud_task();
       if (!spsc_is_empty(&change_buffer_queue)) {
         int index = spsc_next(&change_buffer_queue);
         struct changebuf *buf = &change_buffers[index];
-        transmit_change_buffer(buf);
-        spsc_release(&change_buffer_queue);
-      } else {
-        try_input();
+        if (transmit_change_buffer(buf)) {
+          spsc_release(&change_buffer_queue);
+        }
       }
     }
     return 0;
