@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+enum State {
+  Stopped = 0;
+  Running = 1;
+}
+
+message InputChange {
+  uint32 offset = 1;
+  uint32 value = 2;
+}
+
+message Status {
+  fixed32 cputime = 1;
+  State state = 2;
+  uint32 command_count = 3;
+
+  uint32 start_time = 4;
+  uint32 overflows = 5;
+  repeated InputChange changes = 6;
+}
+
+message AdcUpdate {
+  repeated float values = 1;
+}
+
+message Command {
+  uint32 delay = 1;
+  oneof payload {
+    uint32 trigger = 2;
+    AdcUpdate adc = 3;
+  }
+}

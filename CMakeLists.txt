@@ -1,5 +1,6 @@
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 cmake_minimum_required(VERSION 3.13)
+
 include(pico-sdk/pico_sdk_init.cmake)
 
 project(pico-logic-analyzer)
@@ -56,5 +57,3 @@ target_link_libraries(
 pico_enable_stdio_usb(pico-logic-analyzer 0)
 pico_enable_stdio_uart(pico-logic-analyzer 0)
 pico_add_extra_outputs(pico-logic-analyzer)
-
-

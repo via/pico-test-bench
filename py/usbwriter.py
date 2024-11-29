@@ -12,18 +12,9 @@ from cobs import cobs
 
 # Look for a specific device and open it
 #
-dev = usb.core.find(idVendor=0xcafe, idProduct=0x4001)
+dev = usb.core.find(idVendor=0xcafe, idProduct=0x4010)
 if dev is None:
     raise ValueError('Device not found')
-
-# Detach interfaces if Linux already attached a driver on it.
-#
-for itf_num in [0, 1]:
-    itf = usb.util.find_descriptor(dev.get_active_configuration(),
-                                   bInterfaceNumber=itf_num)
-    if dev.is_kernel_driver_active(itf_num):
-        dev.detach_kernel_driver(itf_num)
-    usb.util.claim_interface(dev, itf)
 
 
 def process(storage, new):
@@ -38,15 +29,17 @@ def process(storage, new):
             msg = Status()
             msg.ParseFromString(decoded)
             print(msg)
-
+        except e:
+            print(e)
         finally:
             break
 
-data = sys.stdin.buffer.read(64)
+data = sys.stdin.buffer.read(4096)
 storage = b""
-while len(data) != 0:
+while True:
     dev.write(0x02, data)
-    #rx = dev.read(0x82, size_or_buffer=4096)
-    #process(storage, rx)
-    data = sys.stdin.buffer.read(64)
+    rx = dev.read(0x82, size_or_buffer=4096)
+    process(storage, rx)
+#    sys.stdout.buffer.write(rx)
+    data = sys.stdin.buffer.read(4096)
 

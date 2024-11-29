@@ -756,7 +756,7 @@ const struct example {
   uint8_t trigger;
 } examples[] = {
   {800, 2},
-  {800, 2},
+  {16000000, 2},
   {800, 2},
   {800, 2},
   {800, 2},

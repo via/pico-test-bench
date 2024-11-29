@@ -313,7 +313,7 @@ static void configure_dma(void) {
 
   irq_set_exclusive_handler(DMA_IRQ_1, dma1_handler);
   irq_set_enabled(DMA_IRQ_1, true);
-  irq_set_priority(DMA_IRQ_1, 0xff);
+  irq_set_priority(DMA_IRQ_1, 0x00);
 
 }
 
@@ -347,7 +347,7 @@ void setup_input_output_pio(void) {
 
     /* Enable all SMs similtaneously */
     pio_enable_sm_mask_in_sync(pio, 
-        (1 << CAPTURE_SM) | 
+        (1 << CAPTURE_SM) |
         (1 << TRIGGERGEN_SM) |
         (1 << SPI_SM));
 
